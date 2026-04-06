@@ -1,0 +1,15 @@
+{
+  "name": "finance-records-service",
+  "version": "1.0.0",
+  "description": "Role-based finance records API with a supporting operations console.",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node --no-warnings src/server.js",
+    "dev": "node --watch --no-warnings src/server.js",
+    "test": "node --no-warnings tests/api.test.js"
+  },
+  "dependencies": {
+    "pg": "^8.20.0",
+    "pg-mem": "^3.0.14"
+  }
+}

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Finance Operations Console</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <script defer src="/assets/app.js"></script>
+  </head>
+  <body>
+    <div class="background-grid"></div>
+    <div class="background-glow background-glow-one"></div>
+    <div class="background-glow background-glow-two"></div>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Finance Records Service</p>
+        <h1>Finance Operations Console</h1>
+        <p class="hero-copy">
+          A supporting console for the Finance Records Service. Use it to review
+          summary metrics, manage records, and administer role-based access.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <a class="ghost-link" href="/docs" target="_blank" rel="noreferrer">Open Docs</a>
+        <a class="ghost-link" href="/openapi.json" target="_blank" rel="noreferrer"
+          >OpenAPI JSON</a
+        >
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="panel auth-panel" id="authPanel">
+        <div class="panel-header">
+          <div>
+            <p class="section-label">Sign In</p>
+            <h2>Sign in with local seed data</h2>
+          </div>
+        </div>
+
+        <form id="loginForm" class="stack-form">
+          <label>
+            <span>Email</span>
+            <input id="emailInput" name="email" type="email" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="passwordInput" name="password" type="password" required />
+          </label>
+          <button class="primary-button" type="submit">Login</button>
+        </form>
+
+        <div class="sample-grid">
+          <button class="sample-card" type="button" data-sample="admin">
+            <strong>Admin</strong>
+            <span>admin@finance.local</span>
+          </button>
+          <button class="sample-card" type="button" data-sample="analyst">
+            <strong>Analyst</strong>
+            <span>analyst@finance.local</span>
+          </button>
+          <button class="sample-card" type="button" data-sample="viewer">
+            <strong>Viewer</strong>
+            <span>viewer@finance.local</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel workspace hidden" id="workspace">
+        <div class="workspace-topbar">
+          <div>
+            <p class="section-label">Session</p>
+            <h2 id="sessionHeading">Account Overview</h2>
+          </div>
+          <div class="session-actions">
+            <span class="status-pill" id="sessionPill">Guest</span>
+            <button class="secondary-button" id="refreshButton" type="button">
+              Refresh
+            </button>
+            <button class="danger-button" id="logoutButton" type="button">
+              Logout
+            </button>
+          </div>
+        </div>
+
+        <div class="tab-bar">
+          <button class="tab-button active" data-tab="dashboard" type="button">
+            Dashboard
+          </button>
+          <button class="tab-button" data-tab="records" type="button">Records</button>
+          <button class="tab-button" data-tab="users" type="button">Users</button>
+          <button class="tab-button" data-tab="docs" type="button">Docs</button>
+        </div>
+
+        <section class="tab-panel" id="dashboardPanel">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">Analytics</p>
+              <h2>Dashboard Overview</h2>
+            </div>
+          </div>
+
+          <form class="filter-grid" id="dashboardFilterForm">
+            <label>
+              <span>From</span>
+              <input id="dashboardFrom" type="date" />
+            </label>
+            <label>
+              <span>To</span>
+              <input id="dashboardTo" type="date" />
+            </label>
+            <label>
+              <span>Group By</span>
+              <select id="dashboardGroupBy">
+                <option value="month">Month</option>
+                <option value="week">Week</option>
+              </select>
+            </label>
+            <label>
+              <span>Recent Limit</span>
+              <input id="dashboardLimit" type="number" min="1" max="20" value="5" />
+            </label>
+            <button class="primary-button" type="submit">Load Dashboard</button>
+          </form>
+
+          <div class="stats-grid">
+            <article class="metric-card">
+              <span>Total Income</span>
+              <strong id="totalIncomeValue">0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Total Expenses</span>
+              <strong id="totalExpensesValue">0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Net Balance</span>
+              <strong id="netBalanceValue">0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Total Records</span>
+              <strong id="totalRecordsValue">0</strong>
+            </article>
+          </div>
+
+          <div class="grid-two">
+            <article class="data-card">
+              <h3>Category Breakdown</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Income</th>
+                      <th>Expenses</th>
+                      <th>Net</th>
+                    </tr>
+                  </thead>
+                  <tbody id="categoryTableBody"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="data-card">
+              <h3>Recent Activity</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Category</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recentTableBody"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+
+          <article class="data-card">
+            <h3>Trend Periods</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Period</th>
+                    <th>Income</th>
+                    <th>Expenses</th>
+                    <th>Net</th>
+                  </tr>
+                </thead>
+                <tbody id="trendTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="tab-panel hidden" id="recordsPanel">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">Records</p>
+              <h2>Financial Records</h2>
+            </div>
+          </div>
+
+          <form class="filter-grid" id="recordFilterForm">
+            <label>
+              <span>Type</span>
+              <select id="recordTypeFilter">
+                <option value="">All</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+            </label>
+            <label>
+              <span>Category</span>
+              <input id="recordCategoryFilter" type="text" placeholder="Software" />
+            </label>
+            <label>
+              <span>Search</span>
+              <input id="recordSearchFilter" type="text" placeholder="invoice" />
+            </label>
+            <label>
+              <span>From</span>
+              <input id="recordFromFilter" type="date" />
+            </label>
+            <label>
+              <span>To</span>
+              <input id="recordToFilter" type="date" />
+            </label>
+            <label>
+              <span>Page Size</span>
+              <select id="recordPageSizeFilter">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+              </select>
+            </label>
+            <label class="checkbox-field" id="includeDeletedField">
+              <input id="includeDeletedFilter" type="checkbox" />
+              <span>Include soft-deleted</span>
+            </label>
+            <button class="primary-button" type="submit">Apply Filters</button>
+          </form>
+
+          <div class="records-layout">
+            <article class="data-card">
+              <div class="card-topline">
+                <h3>Record List</h3>
+                <div class="pagination-bar">
+                  <button class="secondary-button" id="recordPrevPage" type="button">
+                    Previous
+                  </button>
+                  <span id="recordPaginationLabel">Page 1</span>
+                  <button class="secondary-button" id="recordNextPage" type="button">
+                    Next
+                  </button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Category</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recordTableBody"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="data-card" id="recordEditorCard">
+              <div class="card-topline">
+                <h3 id="recordFormTitle">Create Record</h3>
+                <button class="secondary-button" id="recordResetButton" type="button">
+                  Reset
+                </button>
+              </div>
+              <form class="stack-form" id="recordForm">
+                <label>
+                  <span>Amount</span>
+                  <input id="recordAmountInput" type="number" step="0.01" min="0.01" />
+                </label>
+                <label>
+                  <span>Type</span>
+                  <select id="recordTypeInput">
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Category</span>
+                  <input id="recordCategoryInput" type="text" />
+                </label>
+                <label>
+                  <span>Entry Date</span>
+                  <input id="recordDateInput" type="date" />
+                </label>
+                <label>
+                  <span>Notes</span>
+                  <textarea id="recordNotesInput" rows="4"></textarea>
+                </label>
+                <button class="primary-button" id="recordSubmitButton" type="submit">
+                  Save Record
+                </button>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section class="tab-panel hidden" id="usersPanel">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">Admin</p>
+              <h2>User Management</h2>
+            </div>
+          </div>
+
+          <div class="records-layout">
+            <article class="data-card">
+              <h3>Create User</h3>
+              <form class="stack-form" id="userForm">
+                <label>
+                  <span>Name</span>
+                  <input id="userNameInput" type="text" />
+                </label>
+                <label>
+                  <span>Email</span>
+                  <input id="userEmailInput" type="email" />
+                </label>
+                <label>
+                  <span>Password</span>
+                  <input id="userPasswordInput" type="password" />
+                </label>
+                <label>
+                  <span>Role</span>
+                  <select id="userRoleInput">
+                    <option value="viewer">Viewer</option>
+                    <option value="analyst">Analyst</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Status</span>
+                  <select id="userStatusInput">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                <button class="primary-button" type="submit">Create User</button>
+              </form>
+            </article>
+
+            <article class="data-card">
+              <h3>Team Access</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="userTableBody"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="tab-panel hidden" id="docsPanel">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">Reference</p>
+              <h2>Service Resources</h2>
+            </div>
+          </div>
+
+          <div class="docs-grid">
+            <article class="data-card">
+              <h3>API Reference</h3>
+              <p>
+                Open the human-readable reference page or the machine-readable
+                OpenAPI document served by this service.
+              </p>
+              <div class="action-row">
+                <a class="primary-link" href="/docs" target="_blank" rel="noreferrer"
+                    >Reference Page</a
+                >
+                <a
+                  class="ghost-link"
+                  href="/openapi.json"
+                  target="_blank"
+                  rel="noreferrer"
+                  >OpenAPI JSON</a
+                >
+              </div>
+            </article>
+
+            <article class="data-card">
+              <h3>Feature Highlights</h3>
+              <ul class="feature-list">
+                <li>Role-aware dashboard, records, and user workflows.</li>
+                <li>Soft delete plus restore support for financial records.</li>
+                <li>Rate limiting for login and API traffic.</li>
+                <li>PostgreSQL persistence with optional local seed data.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast hidden" id="toast"></div>
+  </body>
+</html>
