@@ -1,246 +1,106 @@
-# Finance Records Service
 
-Finance Records Service is a role-based backend for managing financial records, access permissions, and dashboard summaries. The repository also includes a lightweight operations console served by the same Node.js application, but the backend API is the primary deliverable.
+# Miravi Mart
 
-## Overview
+Miravi Mart is a lightweight, full-stack e-commerce mini application. It features a Node.js/Express backend, an in-memory product store, and a responsive vanilla JavaScript frontend for managing products. This project was created as part of the Miravi Full Stack Developer Assessment.
 
-The service supports:
+## Features
 
-- user creation and role assignment
-- active and inactive account management
-- financial record create, read, update, soft delete, and restore workflows
-- record filtering by type, category, date range, and search term
-- summary reporting for totals, category breakdowns, recent activity, and time trends
-- server-side access control for `viewer`, `analyst`, and `admin`
-- validation, structured error responses, token-based sessions, and rate limiting
+- 🛒 View all products on the homepage
+- ➕ Add products with name, price, and image URL
+- ✏️ Edit existing products
+- 🗑️ Delete products instantly from the UI
+- ✅ Client-side & server-side validation
+- ⏳ Loading and empty states
+- 📱 Mobile-friendly, responsive layout
 
-Public service routes:
+## Tech Stack
 
-- API root: `/`
-- operations console: `/app`
-- reference page: `/docs`
-- OpenAPI document: `/openapi.json`
+- Node.js
+- Express.js
+- HTML, CSS, and vanilla JavaScript
 
-## Architecture
+## Product API
 
-Runtime stack:
+RESTful endpoints:
 
-- Node.js 22
-- native `node:http` server
-- PostgreSQL via `pg`
-- in-memory rate limiting
-- static HTML/CSS/JavaScript console served by the backend
+- `GET /products` — Retrieve all products
+- `POST /products` — Create a new product
+- `PUT /products/:id` — Update an existing product
+- `DELETE /products/:id` — Delete a product
 
-Application structure:
+**Product object shape:**
 
-```text
-src/
-  app.js
-  server.js
-  config.js
-  database/
-  docs/
-  lib/
-  services/
-public/
-  index.html
-  styles.css
-  app.js
-  docs.html
-tests/
-  api.test.js
+```json
+{
+  "id": "string",
+  "name": "Nordic Desk Lamp",
+  "price": 49.99,
+  "imageUrl": "https://example.com/image.jpg"
+}
 ```
 
-## Data Model
+## Getting Started Locally
 
-### Users
+1. **Install dependencies:**
+  ```bash
+  npm install
+  ```
+2. **Start the development server:**
+  ```bash
+  npm start
+  ```
+3. **Open the app in your browser:**
+  [http://localhost:3000](http://localhost:3000)
 
-Core fields:
-
-- `id`
-- `name`
-- `email`
-- `password_hash`
-- `role` as `viewer`, `analyst`, or `admin`
-- `status` as `active` or `inactive`
-- timestamps
-
-### Sessions
-
-Core fields:
-
-- `token`
-- `user_id`
-- `created_at`
-- `expires_at`
-
-### Financial Records
-
-Core fields:
-
-- `id`
-- `amount`
-- `type` as `income` or `expense`
-- `category`
-- `entry_date`
-- `notes`
-- `created_by`
-- `updated_by`
-- `deleted_at`
-- `deleted_by`
-- timestamps
-
-## API Summary
-
-### Authentication
-
-- `POST /auth/login`
-- `POST /auth/logout`
-- `GET /auth/me`
-
-### Users
-
-- `GET /users`
-- `GET /users/:id`
-- `POST /users`
-- `PATCH /users/:id`
-
-Admin access only.
-
-### Records
-
-- `GET /records`
-- `GET /records/:id`
-- `POST /records`
-- `PATCH /records/:id`
-- `DELETE /records/:id`
-- `POST /records/:id/restore`
-
-Supported record filters:
-
-- `page`
-- `pageSize`
-- `type`
-- `category`
-- `from`
-- `to`
-- `search`
-- `includeDeleted` for admin requests
-
-### Dashboard
-
-- `GET /dashboard/overview`
-- `GET /dashboard/trends`
-
-Supported dashboard filters:
-
-- `from`
-- `to`
-- `type`
-- `category`
-- `groupBy` as `month` or `week`
-- `limit`
-
-## Local Setup
-
-### 1. Start PostgreSQL
-
-The repository includes a local PostgreSQL service definition:
-
-```bash
-docker compose up -d postgres
-```
-
-### 2. Configure environment variables
-
-Copy `.env.example` to `.env` and adjust values if needed:
-
+**Optional:**
+Set a custom port by creating a `.env` file or setting the environment variable:
 ```env
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/finance_records
-SEED_SAMPLE_DATA=true
-GENERAL_RATE_LIMIT_MAX=200
-GENERAL_RATE_LIMIT_WINDOW_MS=60000
-LOGIN_RATE_LIMIT_MAX=5
-LOGIN_RATE_LIMIT_WINDOW_MS=600000
+PORT=3000
 ```
 
-Runtime contract:
+## Deployment (Vercel)
 
-- `DATABASE_URL` required
-- `PORT` optional
-- `SEED_SAMPLE_DATA` optional
+This project is ready for instant deployment on [Vercel](https://vercel.com/) — no database or environment variables required.
 
-### 3. Install dependencies and run
+1. Push your repository to GitHub.
+2. Import the repo into Vercel, or deploy from the CLI:
+  ```bash
+  npm i -g vercel
+  vercel
+  ```
+3. For local Vercel-style testing:
+  ```bash
+  vercel dev
+  ```
 
-```bash
-npm install
-npm start
-```
-
-### 4. Access the application
-
-- API: `http://localhost:3000`
-- console: `http://localhost:3000/app`
-- reference page: `http://localhost:3000/docs`
-
-### Sample Users
-
-When `SEED_SAMPLE_DATA=true`, the service creates local seed users:
-
-| Role | Email | Password |
-| --- | --- | --- |
-| Admin | `admin@finance.local` | `Admin@123` |
-| Analyst | `analyst@finance.local` | `Analyst@123` |
-| Viewer | `viewer@finance.local` | `Viewer@123` |
+**Deployment notes:**
+- Static files are in the `public/` directory
+- The root page is `index.html`
+- Product data is in-memory and resets on redeploys or cold starts
 
 ## Testing
 
-Run the automated suite with:
+Automated tests cover:
+- Homepage rendering
+- Seeded product listing
+- Product creation and validation
+- Product updates and missing IDs
+- Product deletion and list refresh
 
+To run tests:
 ```bash
 npm test
 ```
 
-The tests cover:
+## Notes
 
-- login, logout, and inactive accounts
-- role-based access rules
-- record CRUD, filtering, soft delete, and restore
-- dashboard summaries and trends
-- validation and error status codes
-- rate limiting
-- `/app`, `/docs`, and `/openapi.json`
+- Product data is stored in memory and resets when the server restarts.
+- The app ships with three demo products so the homepage is populated immediately.
 
-## Deployment
+---
 
-The default deployment target is Railway with PostgreSQL.
+## Author
 
-### Railway setup
+Created by [Your Name].
 
-1. Create a Railway project.
-2. Add a PostgreSQL service.
-3. Add this repository as a web service using the included `Dockerfile`.
-4. Set `DATABASE_URL` from the Railway PostgreSQL service.
-5. Optionally set `SEED_SAMPLE_DATA=false` for hosted environments.
-6. Deploy the service.
-
-Deployment files included:
-
-- `Dockerfile`
-- `railway.json`
-- `docker-compose.yml` for local PostgreSQL
-
-After deployment, the same service can provide:
-
-- API root on `/`
-- operations console on `/app`
-- reference page on `/docs`
-
-For a submission form, `/docs` is usually the cleanest public link.
-
-## Trade-offs
-
-- Sessions are stored server-side in PostgreSQL instead of using JWTs. This keeps token invalidation straightforward.
-- Record deletion is implemented as soft delete to preserve audit context and allow restore flows.
-- Rate limiting is in-memory, which is reasonable for a single-instance submission but would need a shared store in a horizontally scaled deployment.
-- The operations console is intentionally lightweight and dependency-free so the focus remains on backend behavior and deployability.
+Feel free to reach out for questions or suggestions!
