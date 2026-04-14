@@ -1,7 +1,7 @@
 {
-  "name": "finance-records-service",
+  "name": "miravi-mart",
   "version": "1.0.0",
-  "description": "Role-based finance records API with a supporting operations console.",
+  "description": "Simple e-commerce mini application built with Express and vanilla JavaScript.",
   "type": "commonjs",
   "scripts": {
     "start": "node --no-warnings src/server.js",
@@ -9,7 +9,6 @@
     "test": "node --no-warnings tests/api.test.js"
   },
   "dependencies": {
-    "pg": "^8.20.0",
-    "pg-mem": "^3.0.14"
+    "express": "^5.2.1"
   }
 }

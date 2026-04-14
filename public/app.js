@@ -1,34 +1,13 @@
-const SAMPLE_USERS = {
-  admin: { email: 'admin@finance.local', password: 'Admin@123' },
-  analyst: { email: 'analyst@finance.local', password: 'Analyst@123' },
-  viewer: { email: 'viewer@finance.local', password: 'Viewer@123' },
-};
+const PLACEHOLDER_IMAGE = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480"><rect width="640" height="480" fill="#f5d5ba"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#8f4216" font-family="Trebuchet MS, sans-serif" font-size="34">Product image</text></svg>'
+)}`;
 
 const state = {
-  token: localStorage.getItem('finance_token') || '',
-  user: null,
-  currentTab: 'dashboard',
-  dashboardFilters: {
-    from: '',
-    to: '',
-    groupBy: 'month',
-    limit: '5',
-  },
-  recordFilters: {
-    page: 1,
-    pageSize: 10,
-    type: '',
-    category: '',
-    search: '',
-    from: '',
-    to: '',
-    includeDeleted: false,
-  },
-  dashboard: null,
-  records: [],
-  recordMeta: null,
-  users: [],
-  editingRecordId: null,
+  products: [],
+  loading: true,
+  isSaving: false,
+  deletingId: '',
+  editingProductId: '',
 };
 
 const elements = {};
@@ -36,709 +15,360 @@ const elements = {};
 document.addEventListener('DOMContentLoaded', () => {
   cacheElements();
   attachEventListeners();
-  restoreSession();
+  loadProducts();
 });
 
 function cacheElements() {
   [
-    'authPanel',
-    'workspace',
-    'loginForm',
-    'emailInput',
-    'passwordInput',
-    'refreshButton',
-    'logoutButton',
-    'sessionHeading',
-    'sessionPill',
-    'dashboardFilterForm',
-    'dashboardFrom',
-    'dashboardTo',
-    'dashboardGroupBy',
-    'dashboardLimit',
-    'totalIncomeValue',
-    'totalExpensesValue',
-    'netBalanceValue',
-    'totalRecordsValue',
-    'categoryTableBody',
-    'recentTableBody',
-    'trendTableBody',
-    'recordFilterForm',
-    'recordTypeFilter',
-    'recordCategoryFilter',
-    'recordSearchFilter',
-    'recordFromFilter',
-    'recordToFilter',
-    'recordPageSizeFilter',
-    'includeDeletedFilter',
-    'includeDeletedField',
-    'recordPrevPage',
-    'recordNextPage',
-    'recordPaginationLabel',
-    'recordTableBody',
-    'recordForm',
-    'recordFormTitle',
-    'recordAmountInput',
-    'recordTypeInput',
-    'recordCategoryInput',
-    'recordDateInput',
-    'recordNotesInput',
-    'recordSubmitButton',
-    'recordResetButton',
-    'recordEditorCard',
-    'userForm',
-    'userNameInput',
-    'userEmailInput',
-    'userPasswordInput',
-    'userRoleInput',
-    'userStatusInput',
-    'userTableBody',
-    'toast',
-    'dashboardPanel',
-    'recordsPanel',
-    'usersPanel',
-    'docsPanel',
+    'openCreateButton',
+    'openEmptyStateButton',
+    'catalogSummary',
+    'feedback',
+    'loadingState',
+    'emptyState',
+    'productGrid',
+    'productModal',
+    'closeModalButton',
+    'cancelButton',
+    'productForm',
+    'modalTitle',
+    'nameInput',
+    'priceInput',
+    'imageUrlInput',
+    'formError',
+    'submitButton',
+    'previewImage',
+    'previewName',
+    'previewPrice',
   ].forEach((id) => {
     elements[id] = document.getElementById(id);
   });
-
-  elements.tabButtons = Array.from(document.querySelectorAll('.tab-button'));
-  elements.sampleButtons = Array.from(document.querySelectorAll('[data-sample]'));
 }
 
 function attachEventListeners() {
-  elements.loginForm.addEventListener('submit', handleLogin);
-  elements.refreshButton.addEventListener('click', loadAllVisibleData);
-  elements.logoutButton.addEventListener('click', handleLogout);
-  elements.dashboardFilterForm.addEventListener('submit', handleDashboardFilters);
-  elements.recordFilterForm.addEventListener('submit', handleRecordFilters);
-  elements.recordPrevPage.addEventListener('click', () => changeRecordPage(-1));
-  elements.recordNextPage.addEventListener('click', () => changeRecordPage(1));
-  elements.recordForm.addEventListener('submit', handleRecordSubmit);
-  elements.recordResetButton.addEventListener('click', resetRecordForm);
-  elements.recordTableBody.addEventListener('click', handleRecordTableAction);
-  elements.userForm.addEventListener('submit', handleUserCreate);
-  elements.userTableBody.addEventListener('click', handleUserTableAction);
-  elements.tabButtons.forEach((button) =>
-    button.addEventListener('click', () => activateTab(button.dataset.tab))
-  );
-  elements.sampleButtons.forEach((button) =>
-    button.addEventListener('click', () => fillSample(button.dataset.sample))
-  );
+  elements.openCreateButton.addEventListener('click', () => openModal());
+  elements.openEmptyStateButton.addEventListener('click', () => openModal());
+  elements.closeModalButton.addEventListener('click', closeModal);
+  elements.cancelButton.addEventListener('click', closeModal);
+  elements.productModal.addEventListener('click', handleModalClick);
+  elements.productForm.addEventListener('submit', handleSubmit);
+  elements.productGrid.addEventListener('click', handleProductAction);
+  elements.nameInput.addEventListener('input', syncPreview);
+  elements.priceInput.addEventListener('input', syncPreview);
+  elements.imageUrlInput.addEventListener('input', syncPreview);
+  elements.previewImage.addEventListener('error', () => {
+    elements.previewImage.src = PLACEHOLDER_IMAGE;
+  });
+  document.addEventListener('keydown', handleEscapeKey);
 }
 
-async function restoreSession() {
-  if (!state.token) {
-    renderSession();
-    return;
-  }
+async function loadProducts() {
+  state.loading = true;
+  render();
 
   try {
-    const response = await apiFetch('/auth/me');
-    state.user = response.data;
-    renderSession();
-    await loadAllVisibleData();
+    state.products = await apiFetch('/products');
+    clearFeedback();
   } catch (error) {
-    clearSession();
-    renderSession();
-  }
-}
-
-function fillSample(role) {
-  const credentials = SAMPLE_USERS[role];
-  if (!credentials) {
-    return;
-  }
-
-  elements.emailInput.value = credentials.email;
-  elements.passwordInput.value = credentials.password;
-}
-
-async function handleLogin(event) {
-  event.preventDefault();
-
-  try {
-    const response = await apiFetch('/auth/login', {
-      method: 'POST',
-      body: {
-        email: elements.emailInput.value,
-        password: elements.passwordInput.value,
-      },
-    });
-
-    state.token = response.data.token;
-    state.user = response.data.user;
-    localStorage.setItem('finance_token', state.token);
-    elements.passwordInput.value = '';
-    renderSession();
-    await loadAllVisibleData();
-    notify(`Signed in as ${state.user.name}.`);
-  } catch (error) {
-    notify(getErrorMessage(error), true);
-  }
-}
-
-async function handleLogout() {
-  try {
-    if (state.token) {
-      await apiFetch('/auth/logout', { method: 'POST' });
-    }
-  } catch (error) {
-    notify(getErrorMessage(error), true);
+    showFeedback(getErrorMessage(error), true);
   } finally {
-    clearSession();
-    renderSession();
+    state.loading = false;
+    render();
   }
 }
 
-function clearSession() {
-  state.token = '';
-  state.user = null;
-  state.dashboard = null;
-  state.records = [];
-  state.recordMeta = null;
-  state.users = [];
-  state.editingRecordId = null;
-  localStorage.removeItem('finance_token');
+function render() {
+  const isEmpty = !state.loading && state.products.length === 0;
+  elements.catalogSummary.textContent = state.loading
+    ? 'Loading products...'
+    : `${state.products.length} product${state.products.length === 1 ? '' : 's'} available`;
+
+  elements.loadingState.classList.toggle('hidden', !state.loading);
+  elements.emptyState.classList.toggle('hidden', !isEmpty);
+  elements.productGrid.classList.toggle(
+    'hidden',
+    state.loading || state.products.length === 0
+  );
+
+  elements.submitButton.textContent = state.isSaving
+    ? state.editingProductId
+      ? 'Saving...'
+      : 'Adding...'
+    : state.editingProductId
+      ? 'Save Changes'
+      : 'Save Product';
+  elements.submitButton.disabled = state.isSaving;
+  elements.openCreateButton.disabled = state.isSaving;
+
+  renderProducts();
 }
 
-function renderSession() {
-  const signedIn = Boolean(state.user);
-  elements.authPanel.classList.toggle('hidden', signedIn);
-  elements.workspace.classList.toggle('hidden', !signedIn);
-
-  if (!signedIn) {
+function renderProducts() {
+  if (state.loading || state.products.length === 0) {
+    elements.productGrid.innerHTML = '';
     return;
   }
 
-  elements.sessionHeading.textContent = state.user.name;
-  elements.sessionPill.textContent = `${state.user.role} / ${state.user.status}`;
-  elements.includeDeletedField.classList.toggle('hidden', state.user.role !== 'admin');
-  elements.recordEditorCard.classList.toggle('hidden', state.user.role !== 'admin');
-
-  const viewersOnly = state.user.role === 'viewer';
-  const adminOnly = state.user.role !== 'admin';
-
-  setTabVisibility('records', !viewersOnly);
-  setTabVisibility('users', !adminOnly);
-  setTabVisibility('docs', true);
-  setTabVisibility('dashboard', true);
-
-  if (viewersOnly && state.currentTab !== 'dashboard' && state.currentTab !== 'docs') {
-    activateTab('dashboard');
-  } else if (adminOnly && state.currentTab === 'users') {
-    activateTab('dashboard');
-  } else {
-    activateTab(state.currentTab);
-  }
-}
-
-function setTabVisibility(tabName, visible) {
-  const button = elements.tabButtons.find((entry) => entry.dataset.tab === tabName);
-  if (button) {
-    button.classList.toggle('hidden', !visible);
-  }
-}
-
-function activateTab(tabName) {
-  state.currentTab = tabName;
-  const panelMap = {
-    dashboard: elements.dashboardPanel,
-    records: elements.recordsPanel,
-    users: elements.usersPanel,
-    docs: elements.docsPanel,
-  };
-
-  elements.tabButtons.forEach((button) => {
-    button.classList.toggle('active', button.dataset.tab === tabName);
-  });
-
-  Object.entries(panelMap).forEach(([name, panel]) => {
-    panel.classList.toggle('hidden', name !== tabName);
-  });
-}
-
-async function loadAllVisibleData() {
-  if (!state.user) {
-    return;
-  }
-
-  try {
-    await loadDashboard();
-    if (state.user.role === 'analyst' || state.user.role === 'admin') {
-      await loadRecords();
-    }
-    if (state.user.role === 'admin') {
-      await loadUsers();
-    }
-  } catch (error) {
-    notify(getErrorMessage(error), true);
-  }
-}
-
-async function loadDashboard() {
-  syncDashboardFiltersFromInputs();
-  const params = new URLSearchParams();
-  appendIfPresent(params, 'from', state.dashboardFilters.from);
-  appendIfPresent(params, 'to', state.dashboardFilters.to);
-  appendIfPresent(params, 'groupBy', state.dashboardFilters.groupBy);
-  appendIfPresent(params, 'limit', state.dashboardFilters.limit);
-
-  const response = await apiFetch(`/dashboard/overview?${params.toString()}`);
-  state.dashboard = response.data;
-  renderDashboard();
-}
-
-function renderDashboard() {
-  if (!state.dashboard) {
-    return;
-  }
-
-  const { totals, categoryBreakdown, recentActivity, trends } = state.dashboard;
-  elements.totalIncomeValue.textContent = formatCurrency(totals.totalIncome);
-  elements.totalExpensesValue.textContent = formatCurrency(totals.totalExpenses);
-  elements.netBalanceValue.textContent = formatCurrency(totals.netBalance);
-  elements.totalRecordsValue.textContent = String(totals.totalRecords);
-
-  renderRows(
-    elements.categoryTableBody,
-    categoryBreakdown,
-    (row) => `
-      <tr>
-        <td>${escapeHtml(row.category)}</td>
-        <td>${formatCurrency(row.income)}</td>
-        <td>${formatCurrency(row.expenses)}</td>
-        <td>${formatCurrency(row.net)}</td>
-      </tr>
-    `,
-    4,
-    'No categories found for the selected filters.'
-  );
-
-  renderRows(
-    elements.recentTableBody,
-    recentActivity,
-    (row) => `
-      <tr>
-        <td>${escapeHtml(row.entryDate)}</td>
-        <td>${escapeHtml(row.type)}</td>
-        <td>${escapeHtml(row.category)}</td>
-        <td>${formatCurrency(row.amount)}</td>
-      </tr>
-    `,
-    4,
-    'No recent activity found.'
-  );
-
-  renderRows(
-    elements.trendTableBody,
-    trends,
-    (row) => `
-      <tr>
-        <td>${escapeHtml(row.period)}</td>
-        <td>${formatCurrency(row.income)}</td>
-        <td>${formatCurrency(row.expenses)}</td>
-        <td>${formatCurrency(row.net)}</td>
-      </tr>
-    `,
-    4,
-    'No trend data found.'
-  );
-}
-
-async function loadRecords() {
-  syncRecordFiltersFromInputs();
-  const params = new URLSearchParams();
-  appendIfPresent(params, 'page', state.recordFilters.page);
-  appendIfPresent(params, 'pageSize', state.recordFilters.pageSize);
-  appendIfPresent(params, 'type', state.recordFilters.type);
-  appendIfPresent(params, 'category', state.recordFilters.category);
-  appendIfPresent(params, 'search', state.recordFilters.search);
-  appendIfPresent(params, 'from', state.recordFilters.from);
-  appendIfPresent(params, 'to', state.recordFilters.to);
-  if (state.recordFilters.includeDeleted) {
-    params.set('includeDeleted', 'true');
-  }
-
-  const response = await apiFetch(`/records?${params.toString()}`);
-  state.records = response.data;
-  state.recordMeta = response.meta;
-  renderRecords();
-}
-
-function renderRecords() {
-  elements.recordPaginationLabel.textContent = state.recordMeta
-    ? `Page ${state.recordMeta.page} of ${state.recordMeta.totalPages}`
-    : 'Page 1';
-
-  renderRows(
-    elements.recordTableBody,
-    state.records,
-    (row) => {
-      const actionButtons =
-        state.user.role === 'admin'
-          ? row.isDeleted
-            ? `<button class="secondary-button" data-action="restore" data-id="${row.id}" type="button">Restore</button>`
-            : `
-              <button class="secondary-button" data-action="edit" data-id="${row.id}" type="button">Edit</button>
-              <button class="danger-button" data-action="delete" data-id="${row.id}" type="button">Delete</button>
-            `
-          : '<span class="status-pill">Read only</span>';
-
+  elements.productGrid.innerHTML = state.products
+    .map((product) => {
+      const isDeleting = state.deletingId === product.id;
       return `
-        <tr>
-          <td>${escapeHtml(row.entryDate)}</td>
-          <td>${escapeHtml(row.type)}</td>
-          <td>${escapeHtml(row.category)}</td>
-          <td>${formatCurrency(row.amount)}</td>
-          <td>${row.isDeleted ? 'Deleted' : 'Active'}</td>
-          <td><div class="row-actions">${actionButtons}</div></td>
-        </tr>
+        <article class="product-card">
+          <img src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.name)}" data-fallback-image="true" />
+          <div class="product-body">
+            <div class="product-copy">
+              <h3 class="product-name">${escapeHtml(product.name)}</h3>
+              <p class="product-price">${formatPrice(product.price)}</p>
+            </div>
+            <div class="product-actions">
+              <button class="product-action" type="button" data-action="edit" data-id="${product.id}" ${
+                state.isSaving ? 'disabled' : ''
+              }>
+                Edit
+              </button>
+              <button class="product-action delete" type="button" data-action="delete" data-id="${product.id}" ${
+                isDeleting ? 'disabled' : ''
+              }>
+                ${isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </article>
       `;
-    },
-    6,
-    'No records found.'
-  );
+    })
+    .join('');
 
-  elements.recordPrevPage.disabled = !state.recordMeta || state.recordMeta.page <= 1;
-  elements.recordNextPage.disabled =
-    !state.recordMeta || state.recordMeta.page >= state.recordMeta.totalPages;
+  elements.productGrid.querySelectorAll('[data-fallback-image="true"]').forEach((image) => {
+    image.addEventListener(
+      'error',
+      () => {
+        image.src = PLACEHOLDER_IMAGE;
+      },
+      { once: true }
+    );
+  });
 }
 
-function handleRecordTableAction(event) {
-  const button = event.target.closest('[data-action]');
-  if (!button) {
+function openModal(product = null) {
+  state.editingProductId = product?.id || '';
+  elements.modalTitle.textContent = product ? 'Edit Product' : 'Add Product';
+  elements.nameInput.value = product?.name || '';
+  elements.priceInput.value = product?.price ?? '';
+  elements.imageUrlInput.value = product?.imageUrl || '';
+  clearFormError();
+  syncPreview();
+  elements.productModal.classList.remove('hidden');
+  elements.productModal.setAttribute('aria-hidden', 'false');
+  elements.nameInput.focus();
+  render();
+}
+
+function closeModal(force = false) {
+  if (state.isSaving && !force) {
     return;
   }
 
-  const recordId = Number(button.dataset.id);
-  const action = button.dataset.action;
+  state.editingProductId = '';
+  elements.productForm.reset();
+  clearFormError();
+  syncPreview();
+  elements.productModal.classList.add('hidden');
+  elements.productModal.setAttribute('aria-hidden', 'true');
+  render();
+}
 
-  if (action === 'edit') {
-    const record = state.records.find((entry) => entry.id === recordId);
-    if (!record) {
-      return;
-    }
-    state.editingRecordId = recordId;
-    elements.recordFormTitle.textContent = `Edit Record #${recordId}`;
-    elements.recordSubmitButton.textContent = 'Update Record';
-    elements.recordAmountInput.value = record.amount;
-    elements.recordTypeInput.value = record.type;
-    elements.recordCategoryInput.value = record.category;
-    elements.recordDateInput.value = record.entryDate;
-    elements.recordNotesInput.value = record.notes || '';
-    return;
-  }
-
-  if (action === 'delete') {
-    handleDeleteRecord(recordId);
-    return;
-  }
-
-  if (action === 'restore') {
-    handleRestoreRecord(recordId);
+function handleModalClick(event) {
+  if (event.target.dataset.closeModal === 'true') {
+    closeModal();
   }
 }
 
-async function handleDeleteRecord(recordId) {
-  if (!window.confirm(`Soft delete record #${recordId}?`)) {
-    return;
-  }
-
-  try {
-    await apiFetch(`/records/${recordId}`, { method: 'DELETE' });
-    notify(`Record #${recordId} moved to deleted state.`);
-    await Promise.all([loadRecords(), loadDashboard()]);
-  } catch (error) {
-    notify(getErrorMessage(error), true);
+function handleEscapeKey(event) {
+  if (event.key === 'Escape' && !elements.productModal.classList.contains('hidden')) {
+    closeModal();
   }
 }
 
-async function handleRestoreRecord(recordId) {
-  try {
-    await apiFetch(`/records/${recordId}/restore`, { method: 'POST', body: {} });
-    notify(`Record #${recordId} restored.`);
-    await Promise.all([loadRecords(), loadDashboard()]);
-  } catch (error) {
-    notify(getErrorMessage(error), true);
-  }
-}
-
-async function handleRecordSubmit(event) {
+async function handleSubmit(event) {
   event.preventDefault();
 
-  try {
-    const payload = {
-      amount: Number(elements.recordAmountInput.value),
-      type: elements.recordTypeInput.value,
-      category: elements.recordCategoryInput.value,
-      entryDate: elements.recordDateInput.value,
-      notes: elements.recordNotesInput.value,
-    };
+  const payload = getValidatedFormValues();
+  if (!payload) {
+    return;
+  }
 
-    if (state.editingRecordId) {
-      await apiFetch(`/records/${state.editingRecordId}`, {
-        method: 'PATCH',
+  state.isSaving = true;
+  render();
+
+  try {
+    if (state.editingProductId) {
+      const updatedProduct = await apiFetch(`/products/${state.editingProductId}`, {
+        method: 'PUT',
         body: payload,
       });
-      notify(`Record #${state.editingRecordId} updated.`);
+
+      state.products = state.products.map((product) =>
+        product.id === updatedProduct.id ? updatedProduct : product
+      );
+      showFeedback(`Updated "${updatedProduct.name}".`);
     } else {
-      await apiFetch('/records', {
+      const createdProduct = await apiFetch('/products', {
         method: 'POST',
         body: payload,
       });
-      notify('Record created.');
+
+      state.products = [createdProduct, ...state.products];
+      showFeedback(`Added "${createdProduct.name}".`);
     }
 
-    resetRecordForm();
-    await Promise.all([loadRecords(), loadDashboard()]);
+    closeModal(true);
   } catch (error) {
-    notify(getErrorMessage(error), true);
+    showFormError(getErrorMessage(error));
+  } finally {
+    state.isSaving = false;
+    render();
   }
 }
 
-function resetRecordForm() {
-  state.editingRecordId = null;
-  elements.recordForm.reset();
-  elements.recordFormTitle.textContent = 'Create Record';
-  elements.recordSubmitButton.textContent = 'Save Record';
-}
+async function handleProductAction(event) {
+  const actionButton = event.target.closest('[data-action]');
+  if (!actionButton) {
+    return;
+  }
 
-async function loadUsers() {
-  const response = await apiFetch('/users');
-  state.users = response.data;
-  renderUsers();
-}
+  const product = state.products.find((item) => item.id === actionButton.dataset.id);
+  if (!product) {
+    return;
+  }
 
-function renderUsers() {
-  renderRows(
-    elements.userTableBody,
-    state.users,
-    (user) => `
-      <tr>
-        <td>${escapeHtml(user.name)}</td>
-        <td>${escapeHtml(user.email)}</td>
-        <td>
-          <select class="inline-select" data-role-select="${user.id}">
-            ${['viewer', 'analyst', 'admin']
-              .map(
-                (role) =>
-                  `<option value="${role}" ${
-                    user.role === role ? 'selected' : ''
-                  }>${role}</option>`
-              )
-              .join('')}
-          </select>
-        </td>
-        <td>${escapeHtml(user.status)}</td>
-        <td>
-          <div class="row-actions">
-            <button class="secondary-button" data-user-action="save" data-id="${user.id}" type="button">Save</button>
-            <button class="${
-              user.status === 'active' ? 'danger-button' : 'secondary-button'
-            }" data-user-action="toggle-status" data-id="${user.id}" type="button">
-              ${user.status === 'active' ? 'Deactivate' : 'Activate'}
-            </button>
-          </div>
-        </td>
-      </tr>
-    `,
-    5,
-    'No users found.'
-  );
-}
+  if (actionButton.dataset.action === 'edit') {
+    openModal(product);
+    return;
+  }
 
-async function handleUserCreate(event) {
-  event.preventDefault();
+  const shouldDelete = window.confirm(`Delete "${product.name}"?`);
+  if (!shouldDelete) {
+    return;
+  }
+
+  state.deletingId = product.id;
+  render();
 
   try {
-    await apiFetch('/users', {
-      method: 'POST',
-      body: {
-        name: elements.userNameInput.value,
-        email: elements.userEmailInput.value,
-        password: elements.userPasswordInput.value,
-        role: elements.userRoleInput.value,
-        status: elements.userStatusInput.value,
-      },
-    });
-
-    elements.userForm.reset();
-    elements.userRoleInput.value = 'viewer';
-    elements.userStatusInput.value = 'active';
-    notify('User created.');
-    await loadUsers();
+    await apiFetch(`/products/${product.id}`, { method: 'DELETE' });
+    state.products = state.products.filter((item) => item.id !== product.id);
+    showFeedback(`Deleted "${product.name}".`);
   } catch (error) {
-    notify(getErrorMessage(error), true);
+    showFeedback(getErrorMessage(error), true);
+  } finally {
+    state.deletingId = '';
+    render();
   }
 }
 
-function handleUserTableAction(event) {
-  const button = event.target.closest('[data-user-action]');
-  if (!button) {
-    return;
+function getValidatedFormValues() {
+  const name = elements.nameInput.value.trim();
+  const imageUrl = elements.imageUrlInput.value.trim();
+  const price = Number(elements.priceInput.value);
+
+  if (!name) {
+    showFormError('Name is required.');
+    return null;
   }
 
-  const userId = Number(button.dataset.id);
-  const action = button.dataset.userAction;
-
-  if (action === 'save') {
-    const select = elements.userTableBody.querySelector(
-      `[data-role-select="${userId}"]`
-    );
-    if (!select) {
-      return;
-    }
-    updateUser(userId, { role: select.value });
-    return;
+  if (!Number.isFinite(price) || price <= 0) {
+    showFormError('Price must be a positive number.');
+    return null;
   }
 
-  if (action === 'toggle-status') {
-    const user = state.users.find((entry) => entry.id === userId);
-    if (!user) {
-      return;
-    }
-    const nextStatus = user.status === 'active' ? 'inactive' : 'active';
-    updateUser(userId, { status: nextStatus });
+  if (!imageUrl) {
+    showFormError('Image URL is required.');
+    return null;
   }
+
+  clearFormError();
+
+  return {
+    name,
+    price,
+    imageUrl,
+  };
 }
 
-async function updateUser(userId, payload) {
-  try {
-    await apiFetch(`/users/${userId}`, {
-      method: 'PATCH',
-      body: payload,
-    });
-    notify(`User #${userId} updated.`);
-    await loadUsers();
-  } catch (error) {
-    notify(getErrorMessage(error), true);
-  }
+function syncPreview() {
+  const name = elements.nameInput.value.trim() || 'Product name';
+  const parsedPrice = Number(elements.priceInput.value);
+  const imageUrl = elements.imageUrlInput.value.trim() || PLACEHOLDER_IMAGE;
+
+  elements.previewName.textContent = name;
+  elements.previewPrice.textContent =
+    Number.isFinite(parsedPrice) && parsedPrice > 0
+      ? formatPrice(parsedPrice)
+      : '$0.00';
+  elements.previewImage.src = imageUrl;
 }
 
-function handleDashboardFilters(event) {
-  event.preventDefault();
-  loadDashboard().catch((error) => notify(getErrorMessage(error), true));
-}
-
-function handleRecordFilters(event) {
-  event.preventDefault();
-  state.recordFilters.page = 1;
-  loadRecords().catch((error) => notify(getErrorMessage(error), true));
-}
-
-function changeRecordPage(step) {
-  if (!state.recordMeta) {
-    return;
-  }
-
-  const nextPage = state.recordFilters.page + step;
-  if (nextPage < 1 || nextPage > state.recordMeta.totalPages) {
-    return;
-  }
-
-  state.recordFilters.page = nextPage;
-  loadRecords().catch((error) => notify(getErrorMessage(error), true));
-}
-
-function syncDashboardFiltersFromInputs() {
-  state.dashboardFilters.from = elements.dashboardFrom.value;
-  state.dashboardFilters.to = elements.dashboardTo.value;
-  state.dashboardFilters.groupBy = elements.dashboardGroupBy.value;
-  state.dashboardFilters.limit = elements.dashboardLimit.value || '5';
-}
-
-function syncRecordFiltersFromInputs() {
-  state.recordFilters.type = elements.recordTypeFilter.value;
-  state.recordFilters.category = elements.recordCategoryFilter.value.trim();
-  state.recordFilters.search = elements.recordSearchFilter.value.trim();
-  state.recordFilters.from = elements.recordFromFilter.value;
-  state.recordFilters.to = elements.recordToFilter.value;
-  state.recordFilters.pageSize = Number(elements.recordPageSizeFilter.value || 10);
-  state.recordFilters.includeDeleted = Boolean(elements.includeDeletedFilter.checked);
-}
-
-async function apiFetch(path, options = {}) {
-  const headers = {};
-  if (state.token) {
-    headers.Authorization = `Bearer ${state.token}`;
-  }
-  if (options.body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const response = await fetch(path, {
+async function apiFetch(pathname, options = {}) {
+  const response = await fetch(pathname, {
     method: options.method || 'GET',
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
+  if (response.status === 204) {
+    return null;
+  }
+
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
+  const data = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    throw {
-      status: response.status,
-      payload,
-    };
+    const error = new Error(data?.error || 'Something went wrong.');
+    error.status = response.status;
+    throw error;
   }
 
-  return payload;
+  return data;
 }
 
-function renderRows(target, items, renderer, columnCount, emptyMessage) {
-  if (!items || items.length === 0) {
-    target.innerHTML = `<tr><td colspan="${columnCount}">${escapeHtml(
-      emptyMessage
-    )}</td></tr>`;
-    return;
-  }
-
-  target.innerHTML = items.map(renderer).join('');
+function showFeedback(message, isError = false) {
+  elements.feedback.textContent = message;
+  elements.feedback.className = `feedback ${isError ? 'error' : 'success'}`;
 }
 
-function appendIfPresent(params, key, value) {
-  if (value === '' || value === undefined || value === null) {
-    return;
-  }
-
-  params.set(key, String(value));
+function clearFeedback() {
+  elements.feedback.textContent = '';
+  elements.feedback.className = 'feedback hidden';
 }
 
-function formatCurrency(value) {
+function showFormError(message) {
+  elements.formError.textContent = message;
+  elements.formError.classList.remove('hidden');
+}
+
+function clearFormError() {
+  elements.formError.textContent = '';
+  elements.formError.classList.add('hidden');
+}
+
+function getErrorMessage(error) {
+  return error?.message || 'Something went wrong.';
+}
+
+function formatPrice(value) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+  }).format(value);
 }
 
 function escapeHtml(value) {
-  return String(value ?? '')
+  return String(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
-}
-
-function getErrorMessage(error) {
-  if (error?.payload?.error?.message) {
-    return error.payload.error.message;
-  }
-
-  return 'Something went wrong.';
-}
-
-let toastTimer = null;
-function notify(message, isError = false) {
-  elements.toast.textContent = message;
-  elements.toast.classList.remove('hidden');
-  elements.toast.style.background = isError
-    ? 'rgba(122, 33, 33, 0.95)'
-    : 'rgba(47, 36, 25, 0.94)';
-
-  window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => {
-    elements.toast.classList.add('hidden');
-  }, 2600);
 }

@@ -1,14 +1,15 @@
 const { PORT } = require('./config');
 const { createApp } = require('./app');
 
-async function bootstrap() {
-  const app = createApp();
-  await app.start(PORT);
+const appInstance = createApp();
 
-  console.log(`Finance Records Service running on http://localhost:${app.port}`);
+async function bootstrap() {
+  await appInstance.start(PORT);
+
+  console.log(`Miravi Mart running on http://localhost:${appInstance.port}`);
 
   const shutdown = async () => {
-    await app.close();
+    await appInstance.close();
     process.exit(0);
   };
 
@@ -16,7 +17,11 @@ async function bootstrap() {
   process.on('SIGTERM', shutdown);
 }
 
-bootstrap().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (require.main === module) {
+  bootstrap().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = appInstance.app;

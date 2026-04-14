@@ -1,5 +1,0 @@
-.git
-tests
-*.log
-node_modules
-.env
